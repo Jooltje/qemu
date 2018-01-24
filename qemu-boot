@@ -6,7 +6,7 @@ remote=$1
 disk="$name.img"
 card="enp2s0"
 wan="wan-br"
-
+lan="lan-br"
 
 if [ ! -f "$disk" ]; then
     qemu-img create -f raw "$disk" 8G
@@ -20,6 +20,11 @@ if [ ! -d "/sys/devices/virtual/net/$wan" ]; then
     sudo ip link set "$card" master "$wan"
 fi
 
+if [ ! -d "/sys/devices/virtual/net/$lan" ]; then
+    sudo ip link add dev "$lan" type bridge
+    sudo ip link set dev "$lan" up
+fi
+
 wandev="wan-$name"
 
 if [ ! -d "/sys/devices/virtual/net/$wandev" ]; then
@@ -30,11 +35,24 @@ fi
 
 wanmac=$(./qemu-mac "$wandev")
 
+landev="lan-$name"
+
+if [ ! -d "/sys/devices/virtual/net/$landev" ]; then
+    sudo ip tuntap add dev "$landev" mode tap user err group err
+    sudo ip link set dev "$landev" up
+    sudo ip link set dev "$landev" master "$lan"
+fi
+
+lanmac=$(./qemu-mac "$landev")
+
+
 qemu-system-x86_64 \
 	-m 256M \
 	-boot order=cnd,menu=on \
 	-drive file="$disk",format=raw \
 	-cdrom mini.iso \
+        -device e1000,mac="$lanmac",netdev=lan \
+        -netdev tap,id=lan,ifname="$landev",script=no,downscript=no \
         -device e1000,mac="$wanmac",netdev=wan \
         -netdev tap,id=wan,ifname="$wandev",script=no,downscript=no \
 	-vga qxl \
