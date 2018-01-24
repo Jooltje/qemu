@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+port=$1
+
+./qemu-boot $1
+./qemu-view $1

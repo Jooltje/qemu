@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+port=$1
+
+remote-viewer "spice://127.0.0.1:$port" &
