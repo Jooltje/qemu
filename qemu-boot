@@ -4,83 +4,80 @@ name=$1
 #remote=$2
 remote=$1
 disk="$name.img"
-card="enp2s0"
-wan="wan-br"
-lan="lan-br"
+#card="enp2s0"
+card="eno1"
+user="admisol"
 
 if [ ! -f "$disk" ]; then
     qemu-img create -f raw "$disk" 8G
 fi
 
-if [ ! -d "/sys/devices/virtual/net/$wan" ]; then
-    sudo ip link add dev "$wan" type bridge
-    sudo ip link set dev "$wan" up
+#lan
+lan="lan-br"
+landev="lan-$name"
+lanmac=$(./qemu-mac "$landev")
 
-    sudo ip address flush dev "$card"
-    sudo ip link set "$card" master "$wan"
-fi
-
+#lan bridge
 if [ ! -d "/sys/devices/virtual/net/$lan" ]; then
     sudo ip link add dev "$lan" type bridge
     sudo ip link set dev "$lan" up
 fi
 
-wandev="wan-$name"
-
-if [ ! -d "/sys/devices/virtual/net/$wandev" ]; then
-    sudo ip tuntap add dev "$wandev" mode tap user err group err
-    sudo ip link set dev "$wandev" up
-    sudo ip link set dev "$wandev" master "$wan"
-fi
-
-wanmac=$(./qemu-mac "$wandev")
-
-landev="lan-$name"
-
+#lan device
 if [ ! -d "/sys/devices/virtual/net/$landev" ]; then
-    sudo ip tuntap add dev "$landev" mode tap user err group err
+    sudo ip tuntap add dev "$landev" mode tap user "$user" group "$user"
     sudo ip link set dev "$landev" up
     sudo ip link set dev "$landev" master "$lan"
 fi
 
-lanmac=$(./qemu-mac "$landev")
+if [ "$name" -eq "7000" ]; then
+	#wan
+	wan="wan-br"
+	wandev="wan-$name"
+	wanmac=$(./qemu-mac "$wandev")
 
+	#wan bridge
+	if [ ! -d "/sys/devices/virtual/net/$wan" ]; then
+		sudo ip link add dev "$wan" type bridge
+		sudo ip link set dev "$wan" up
 
-qemu-system-x86_64 \
-	-m 256M \
-	-boot order=cnd,menu=on \
-	-drive file="$disk",format=raw \
-	-cdrom mini.iso \
-        -device e1000,mac="$lanmac",netdev=lan \
-        -netdev tap,id=lan,ifname="$landev",script=no,downscript=no \
-        -device e1000,mac="$wanmac",netdev=wan \
-        -netdev tap,id=wan,ifname="$wandev",script=no,downscript=no \
-	-vga qxl \
-	-spice "port=$remote,disable-ticketing" \
-	-enable-kvm \
-	-daemonize
+		sudo ip address flush dev "$card"
+		sudo ip link set "$card" master "$wan"
+	fi
 
-#sudo ip link add dev virt-wan type bridge
-#sudo ip link set dev virt-wan up
+	#wan device
+	if [ ! -d "/sys/devices/virtual/net/$wandev" ]; then
+		sudo ip tuntap add dev "$wandev" mode tap user "$user" group "$user"
+		sudo ip link set dev "$wandev" up
+		sudo ip link set dev "$wandev" master "$wan"
+	fi
+fi
 
-#sudo ip tuntap add dev provider mode tap user err group err
-#sudo ip link set dev provider up
-#sudo ip link set dev provider master virt-wan
-
-#sudo ip address flush dev enp2s0
-#sudo ip link set enp2s0 master virt-wan
-
-#sudo ip link add dev virt-lan type bridge
-#sudo ip link set dev virt-lan  up
-
-#sudo ip tuntap add dev cinnabar mode tap user err group err
-#sudo ip link set dev cinnabar up
-#sudo ip link set dev cinnabar master virt-lan
-
-#sudo ip tuntap add dev blue mode tap user err group err
-#sudo ip link set dev blue up
-#sudo ip link set dev blue master virt-lan
-
-#sudo ip tuntap add dev live mode tap user err group err
-#sudo ip link set dev live up
-#sudo ip link set dev live master virt-lan
+#boot
+if [ "$name" -eq "7000" ]; then
+	qemu-system-x86_64 \
+        	-m 256M \
+	        -boot order=cnd,menu=on \
+	        -drive file="$disk",format=raw \
+	        -cdrom mini.iso \
+	        -device e1000,mac="$lanmac",netdev=lan \
+	        -netdev tap,id=lan,ifname="$landev",script=no,downscript=no \
+	        -device e1000,mac="$wanmac",netdev=wan \
+	        -netdev tap,id=wan,ifname="$wandev",script=no,downscript=no \
+	        -vga qxl \
+	        -spice "port=$remote,disable-ticketing" \
+	        -enable-kvm \
+	        -daemonize
+else
+        qemu-system-x86_64 \
+                -m 256M \
+                -boot order=cnd,menu=on \
+                -drive file="$disk",format=raw \
+                -cdrom mini.iso \
+                -device e1000,mac="$lanmac",netdev=lan \
+                -netdev tap,id=lan,ifname="$landev",script=no,downscript=no \
+                -vga qxl \
+                -spice "port=$remote,disable-ticketing" \
+                -enable-kvm \
+                -daemonize
+fi
